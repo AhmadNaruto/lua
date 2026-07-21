@@ -30,16 +30,16 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
 
     // Cache classes and method IDs using the classloader of the main thread.
     // This solves class loading issues when native background threads query classes.
-    jclass ls_local = (*env)->FindClass(env, "lua/LuaState");
+    jclass ls_local = (*env)->FindClass(env, "io/github/anaruto/lua/LuaState");
     if (ls_local) {
         luastate_class = (jclass)(*env)->NewGlobalRef(env, ls_local);
-        luastate_wrap_id = (*env)->GetStaticMethodID(env, luastate_class, "wrap", "(J)Llua/LuaState;");
+        luastate_wrap_id = (*env)->GetStaticMethodID(env, luastate_class, "wrap", "(J)Lio/github/anaruto/lua/LuaState;");
     }
 
-    jclass cb_local = (*env)->FindClass(env, "lua/LuaCallback");
+    jclass cb_local = (*env)->FindClass(env, "io/github/anaruto/lua/LuaCallback");
     if (cb_local) {
         callback_class = (jclass)(*env)->NewGlobalRef(env, cb_local);
-        callback_invoke_id = (*env)->GetMethodID(env, callback_class, "invoke", "(Llua/LuaState;)I");
+        callback_invoke_id = (*env)->GetMethodID(env, callback_class, "invoke", "(Lio/github/anaruto/lua/LuaState;)I");
     }
 
     // Register the thread-local storage key to track attached JNI threads
@@ -81,19 +81,19 @@ JNIEnv *get_jni_env(void) {
 // Core lifecycle methods
 // ----------------------------------------------------------------------------
 
-JNIEXPORT jlong JNICALL Java_lua_LuaState_nativeNewState(JNIEnv *env, jclass clazz) {
+JNIEXPORT jlong JNICALL Java_io_github_anaruto_lua_LuaState_nativeNewState(JNIEnv *env, jclass clazz) {
     lua_State *L = luaL_newstate();
     return (jlong)L;
 }
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativeClose(JNIEnv *env, jobject thiz, jlong ptr) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativeClose(JNIEnv *env, jobject thiz, jlong ptr) {
     lua_State *L = (lua_State *)ptr;
     if (L) {
         lua_close(L);
     }
 }
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativeOpenLibs(JNIEnv *env, jobject thiz, jlong ptr) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativeOpenLibs(JNIEnv *env, jobject thiz, jlong ptr) {
     lua_State *L = (lua_State *)ptr;
     if (L) {
         luaL_openlibs(L);
@@ -104,7 +104,7 @@ JNIEXPORT void JNICALL Java_lua_LuaState_nativeOpenLibs(JNIEnv *env, jobject thi
 // Script execution methods
 // ----------------------------------------------------------------------------
 
-JNIEXPORT jint JNICALL Java_lua_LuaState_nativeLoadString(JNIEnv *env, jobject thiz, jlong ptr, jstring script) {
+JNIEXPORT jint JNICALL Java_io_github_anaruto_lua_LuaState_nativeLoadString(JNIEnv *env, jobject thiz, jlong ptr, jstring script) {
     lua_State *L = (lua_State *)ptr;
     if (!L || !script) return -1;
     const char *code = (*env)->GetStringUTFChars(env, script, NULL);
@@ -113,7 +113,7 @@ JNIEXPORT jint JNICALL Java_lua_LuaState_nativeLoadString(JNIEnv *env, jobject t
     return res;
 }
 
-JNIEXPORT jint JNICALL Java_lua_LuaState_nativePCall(JNIEnv *env, jobject thiz, jlong ptr, jint nargs, jint nresults, jint errfunc) {
+JNIEXPORT jint JNICALL Java_io_github_anaruto_lua_LuaState_nativePCall(JNIEnv *env, jobject thiz, jlong ptr, jint nargs, jint nresults, jint errfunc) {
     lua_State *L = (lua_State *)ptr;
     if (!L) return -1;
     return lua_pcall(L, nargs, nresults, errfunc);
@@ -123,7 +123,7 @@ JNIEXPORT jint JNICALL Java_lua_LuaState_nativePCall(JNIEnv *env, jobject thiz, 
 // Global variables
 // ----------------------------------------------------------------------------
 
-JNIEXPORT jint JNICALL Java_lua_LuaState_nativeGetGlobal(JNIEnv *env, jobject thiz, jlong ptr, jstring name) {
+JNIEXPORT jint JNICALL Java_io_github_anaruto_lua_LuaState_nativeGetGlobal(JNIEnv *env, jobject thiz, jlong ptr, jstring name) {
     lua_State *L = (lua_State *)ptr;
     if (!L || !name) return -1;
     const char *str = (*env)->GetStringUTFChars(env, name, NULL);
@@ -132,7 +132,7 @@ JNIEXPORT jint JNICALL Java_lua_LuaState_nativeGetGlobal(JNIEnv *env, jobject th
     return res;
 }
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativeSetGlobal(JNIEnv *env, jobject thiz, jlong ptr, jstring name) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativeSetGlobal(JNIEnv *env, jobject thiz, jlong ptr, jstring name) {
     lua_State *L = (lua_State *)ptr;
     if (!L || !name) return;
     const char *str = (*env)->GetStringUTFChars(env, name, NULL);
@@ -144,27 +144,27 @@ JNIEXPORT void JNICALL Java_lua_LuaState_nativeSetGlobal(JNIEnv *env, jobject th
 // Push methods
 // ----------------------------------------------------------------------------
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativePushNil(JNIEnv *env, jobject thiz, jlong ptr) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativePushNil(JNIEnv *env, jobject thiz, jlong ptr) {
     lua_State *L = (lua_State *)ptr;
     if (L) lua_pushnil(L);
 }
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativePushBoolean(JNIEnv *env, jobject thiz, jlong ptr, jboolean val) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativePushBoolean(JNIEnv *env, jobject thiz, jlong ptr, jboolean val) {
     lua_State *L = (lua_State *)ptr;
     if (L) lua_pushboolean(L, val);
 }
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativePushNumber(JNIEnv *env, jobject thiz, jlong ptr, jdouble val) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativePushNumber(JNIEnv *env, jobject thiz, jlong ptr, jdouble val) {
     lua_State *L = (lua_State *)ptr;
     if (L) lua_pushnumber(L, val);
 }
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativePushInteger(JNIEnv *env, jobject thiz, jlong ptr, jlong val) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativePushInteger(JNIEnv *env, jobject thiz, jlong ptr, jlong val) {
     lua_State *L = (lua_State *)ptr;
     if (L) lua_pushinteger(L, (lua_Integer)val);
 }
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativePushString(JNIEnv *env, jobject thiz, jlong ptr, jstring val) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativePushString(JNIEnv *env, jobject thiz, jlong ptr, jstring val) {
     lua_State *L = (lua_State *)ptr;
     if (!L || !val) return;
     const char *str = (*env)->GetStringUTFChars(env, val, NULL);
@@ -176,25 +176,25 @@ JNIEXPORT void JNICALL Java_lua_LuaState_nativePushString(JNIEnv *env, jobject t
 // Read methods
 // ----------------------------------------------------------------------------
 
-JNIEXPORT jboolean JNICALL Java_lua_LuaState_nativeToBoolean(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
+JNIEXPORT jboolean JNICALL Java_io_github_anaruto_lua_LuaState_nativeToBoolean(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
     lua_State *L = (lua_State *)ptr;
     if (!L) return JNI_FALSE;
     return lua_toboolean(L, index) ? JNI_TRUE : JNI_FALSE;
 }
 
-JNIEXPORT jdouble JNICALL Java_lua_LuaState_nativeToNumber(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
+JNIEXPORT jdouble JNICALL Java_io_github_anaruto_lua_LuaState_nativeToNumber(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
     lua_State *L = (lua_State *)ptr;
     if (!L) return 0.0;
     return lua_tonumber(L, index);
 }
 
-JNIEXPORT jlong JNICALL Java_lua_LuaState_nativeToInteger(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
+JNIEXPORT jlong JNICALL Java_io_github_anaruto_lua_LuaState_nativeToInteger(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
     lua_State *L = (lua_State *)ptr;
     if (!L) return 0;
     return (jlong)lua_tointeger(L, index);
 }
 
-JNIEXPORT jstring JNICALL Java_lua_LuaState_nativeToString(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
+JNIEXPORT jstring JNICALL Java_io_github_anaruto_lua_LuaState_nativeToString(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
     lua_State *L = (lua_State *)ptr;
     if (!L) return NULL;
     const char *str = lua_tostring(L, index);
@@ -202,19 +202,19 @@ JNIEXPORT jstring JNICALL Java_lua_LuaState_nativeToString(JNIEnv *env, jobject 
     return (*env)->NewStringUTF(env, str);
 }
 
-JNIEXPORT jint JNICALL Java_lua_LuaState_nativeType(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
+JNIEXPORT jint JNICALL Java_io_github_anaruto_lua_LuaState_nativeType(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
     lua_State *L = (lua_State *)ptr;
     if (!L) return -1;
     return lua_type(L, index);
 }
 
-JNIEXPORT jint JNICALL Java_lua_LuaState_nativeGetTop(JNIEnv *env, jobject thiz, jlong ptr) {
+JNIEXPORT jint JNICALL Java_io_github_anaruto_lua_LuaState_nativeGetTop(JNIEnv *env, jobject thiz, jlong ptr) {
     lua_State *L = (lua_State *)ptr;
     if (!L) return 0;
     return lua_gettop(L);
 }
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativePop(JNIEnv *env, jobject thiz, jlong ptr, jint n) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativePop(JNIEnv *env, jobject thiz, jlong ptr, jint n) {
     lua_State *L = (lua_State *)ptr;
     if (L) lua_pop(L, n);
 }
@@ -223,29 +223,29 @@ JNIEXPORT void JNICALL Java_lua_LuaState_nativePop(JNIEnv *env, jobject thiz, jl
 // Table methods
 // ----------------------------------------------------------------------------
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativeNewTable(JNIEnv *env, jobject thiz, jlong ptr) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativeNewTable(JNIEnv *env, jobject thiz, jlong ptr) {
     lua_State *L = (lua_State *)ptr;
     if (L) lua_newtable(L);
 }
 
-JNIEXPORT jint JNICALL Java_lua_LuaState_nativeGetTable(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
+JNIEXPORT jint JNICALL Java_io_github_anaruto_lua_LuaState_nativeGetTable(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
     lua_State *L = (lua_State *)ptr;
     if (!L) return -1;
     return lua_gettable(L, index);
 }
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativeSetTable(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativeSetTable(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
     lua_State *L = (lua_State *)ptr;
     if (L) lua_settable(L, index);
 }
 
-JNIEXPORT jint JNICALL Java_lua_LuaState_nativeRawGet(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
+JNIEXPORT jint JNICALL Java_io_github_anaruto_lua_LuaState_nativeRawGet(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
     lua_State *L = (lua_State *)ptr;
     if (!L) return -1;
     return lua_rawget(L, index);
 }
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativeRawSet(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativeRawSet(JNIEnv *env, jobject thiz, jlong ptr, jint index) {
     lua_State *L = (lua_State *)ptr;
     if (L) lua_rawset(L, index);
 }
@@ -313,7 +313,7 @@ int lua_jni_callback(lua_State *L) {
     return (int)num_results;
 }
 
-JNIEXPORT void JNICALL Java_lua_LuaState_nativeRegisterFunction(JNIEnv *env, jobject thiz, jlong ptr, jstring name, jobject callback) {
+JNIEXPORT void JNICALL Java_io_github_anaruto_lua_LuaState_nativeRegisterFunction(JNIEnv *env, jobject thiz, jlong ptr, jstring name, jobject callback) {
     lua_State *L = (lua_State *)ptr;
     if (!L || !name || !callback || !luastate_class) return;
 

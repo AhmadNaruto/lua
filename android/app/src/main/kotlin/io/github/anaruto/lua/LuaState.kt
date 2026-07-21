@@ -1,4 +1,4 @@
-package lua
+package io.github.anaruto.lua
 
 import java.io.Closeable
 

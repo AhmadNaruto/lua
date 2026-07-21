@@ -1,4 +1,4 @@
-package lua
+package io.github.anaruto.lua
 
 enum class LuaType(val id: Int) {
     NONE(-1),

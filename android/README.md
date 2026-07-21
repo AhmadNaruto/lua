@@ -20,7 +20,7 @@ This project provides a native Kotlin binding for the Lua 5.5 scripting language
 │   │   └── kotlin/
 │   │       ├── com/example/luaandroid/
 │   │       │   └── MainActivity.kt     # Jetpack Compose Lua runner interface (Reference)
-│   │       └── lua/
+│   │       └── io/github/anaruto/lua/
 │   │           ├── LuaState.kt         # Core Kotlin context API
 │   │           ├── LuaType.kt          # Lua type system maps
 │   │           ├── LuaCallback.kt      # Interoperability callback interface
