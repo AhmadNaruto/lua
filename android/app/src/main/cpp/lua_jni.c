@@ -1,46 +1,80 @@
 #include <jni.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include "lua.h"
 #include "lualib.h"
 #include "lauxlib.h"
 
-// Cache for JVM and classes/methods
+// Cache for JVM and classes/methods (Cached on JNI_OnLoad for thread safety and performance)
 static JavaVM *cached_jvm = NULL;
 static jclass luastate_class = NULL;
 static jmethodID luastate_wrap_id = NULL;
+static jclass callback_class = NULL;
 static jmethodID callback_invoke_id = NULL;
+static pthread_key_t thread_key;
+
+// Pthread destructor automatically detaches background threads when they terminate
+static void detach_thread_destructor(void *env) {
+    if (cached_jvm) {
+        (*cached_jvm)->DetachCurrentThread(cached_jvm);
+    }
+}
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
     cached_jvm = jvm;
+    JNIEnv *env = NULL;
+    if ((*jvm)->GetEnv(jvm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+        return JNI_ERR;
+    }
+
+    // Cache classes and method IDs using the classloader of the main thread.
+    // This solves class loading issues when native background threads query classes.
+    jclass ls_local = (*env)->FindClass(env, "lua/LuaState");
+    if (ls_local) {
+        luastate_class = (jclass)(*env)->NewGlobalRef(env, ls_local);
+        luastate_wrap_id = (*env)->GetStaticMethodID(env, luastate_class, "wrap", "(J)Llua/LuaState;");
+    }
+
+    jclass cb_local = (*env)->FindClass(env, "lua/LuaCallback");
+    if (cb_local) {
+        callback_class = (jclass)(*env)->NewGlobalRef(env, cb_local);
+        callback_invoke_id = (*env)->GetMethodID(env, callback_class, "invoke", "(Llua/LuaState;)I");
+    }
+
+    // Register the thread-local storage key to track attached JNI threads
+    pthread_key_create(&thread_key, detach_thread_destructor);
+
     return JNI_VERSION_1_6;
+}
+
+JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *jvm, void *reserved) {
+    JNIEnv *env = NULL;
+    if ((*jvm)->GetEnv(jvm, (void**)&env, JNI_VERSION_1_6) == JNI_OK) {
+        if (luastate_class) {
+            (*env)->DeleteGlobalRef(env, luastate_class);
+            luastate_class = NULL;
+        }
+        if (callback_class) {
+            (*env)->DeleteGlobalRef(env, callback_class);
+            callback_class = NULL;
+        }
+    }
+    pthread_key_delete(thread_key);
 }
 
 JNIEnv *get_jni_env(void) {
     JNIEnv *env = NULL;
     jint res = (*cached_jvm)->GetEnv(cached_jvm, (void**)&env, JNI_VERSION_1_6);
     if (res == JNI_EDETACHED) {
-        if ((*cached_jvm)->AttachCurrentThread(cached_jvm, &env, NULL) != 0) {
+        if ((*cached_jvm)->AttachCurrentThread(cached_jvm, &env, NULL) == JNI_OK) {
+            // Save the JNIEnv pointer in thread-local storage to detach thread on exit
+            pthread_setspecific(thread_key, env);
+        } else {
             return NULL;
         }
     }
     return env;
-}
-
-void init_jni_caches(JNIEnv *env) {
-    if (luastate_class == NULL) {
-        jclass local_class = (*env)->FindClass(env, "lua/LuaState");
-        if (local_class) {
-            luastate_class = (jclass)(*env)->NewGlobalRef(env, local_class);
-            luastate_wrap_id = (*env)->GetStaticMethodID(env, luastate_class, "wrap", "(J)Llua/LuaState;");
-        }
-    }
-    if (callback_invoke_id == NULL) {
-        jclass cb_cls = (*env)->FindClass(env, "lua/LuaCallback");
-        if (cb_cls) {
-            callback_invoke_id = (*env)->GetMethodID(env, cb_cls, "invoke", "(Llua/LuaState;)I");
-        }
-    }
 }
 
 // ----------------------------------------------------------------------------
@@ -240,10 +274,7 @@ int lua_jni_callback(lua_State *L) {
     jobject callback = *ud;
 
     JNIEnv *env = get_jni_env();
-    if (!env) return 0;
-
-    init_jni_caches(env);
-    if (!callback_invoke_id || !luastate_wrap_id || !luastate_class) {
+    if (!env || !callback_invoke_id || !luastate_wrap_id || !luastate_class) {
         return 0;
     }
 
@@ -257,19 +288,39 @@ int lua_jni_callback(lua_State *L) {
     // Clean up the local reference to the temporary LuaState wrapper
     (*env)->DeleteLocalRef(env, wrapped_state);
 
+    // Check if the Kotlin function threw an exception, and safely propagate it to Lua
+    if ((*env)->ExceptionCheck(env)) {
+        jthrowable ex = (*env)->ExceptionOccurred(env);
+        (*env)->ExceptionClear(env);
+
+        jclass ex_class = (*env)->GetObjectClass(env, ex);
+        jmethodID to_string = (*env)->GetMethodID(env, ex_class, "toString", "()Ljava/lang/String;");
+        jstring msg_str = (jstring)(*env)->CallObjectMethod(env, ex, to_string);
+        const char *msg = (*env)->GetStringUTFChars(env, msg_str, NULL);
+
+        lua_pushstring(L, msg ? msg : "Kotlin Exception");
+
+        if (msg) {
+            (*env)->ReleaseStringUTFChars(env, msg_str, msg);
+        }
+        (*env)->DeleteLocalRef(env, ex);
+        (*env)->DeleteLocalRef(env, ex_class);
+        (*env)->DeleteLocalRef(env, msg_str);
+
+        return lua_error(L); // Triggers longjmp in Lua
+    }
+
     return (int)num_results;
 }
 
 JNIEXPORT void JNICALL Java_lua_LuaState_nativeRegisterFunction(JNIEnv *env, jobject thiz, jlong ptr, jstring name, jobject callback) {
     lua_State *L = (lua_State *)ptr;
-    if (!L || !name || !callback) return;
-
-    init_jni_caches(env);
+    if (!L || !name || !callback || !luastate_class) return;
 
     // Create a new JVM global reference to persist the Kotlin callback object
     jobject g_callback = (*env)->NewGlobalRef(env, callback);
 
-    // Allocate userdata in Lua to hold the JNI global reference (for automatic memory management)
+    // Allocate userdata in Lua to hold the JNI global reference
     jobject *ud = (jobject*)lua_newuserdatauv(L, sizeof(jobject), 0);
     *ud = g_callback;
 
