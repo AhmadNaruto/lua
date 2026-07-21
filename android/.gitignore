@@ -1,0 +1,25 @@
+# Gradle build files and caches
+.gradle/
+build/
+.cxx/
+
+# Local configuration files (contains local SDK/NDK paths)
+local.properties
+
+# Android Studio / IntelliJ IDEA files
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Compilation outputs
+*.so
+*.aar
+*.apk
+
+# Log files
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
